@@ -77,7 +77,14 @@ export const discover = Effect.fn("ConfigDiscovery.discover")(function* (options
   const directories =
     globalRoots.slice(0, configDirectories.length).includes(current) || options?.project === false
       ? []
-      : yield* fs.up({ targets: ["."], start: location.directory }).pipe(Effect.orDie)
+      : // slim: walk parents only up to $HOME (v1 stopped there too); outside $HOME, only the folder itself.
+        yield* fs
+          .up({
+            targets: ["."],
+            start: location.directory,
+            stop: FSUtil.contains(global.home, location.directory) ? global.home : location.directory,
+          })
+          .pipe(Effect.orDie)
   const discovered = yield* Effect.forEach(directories, (directory) =>
     Effect.gen(function* () {
       // Resolve the parent too: missing children must honor symlinked global roots.

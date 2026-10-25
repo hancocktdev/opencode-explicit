@@ -45,6 +45,8 @@ export const Info = Schema.Struct({
           hidden: false,
           permissions: [
             { action: "*", resource: "*", effect: "allow" },
+            // slim: ask before touching anything outside the session's folder (v1's default), without relying on config.
+            { action: "external_directory", resource: "*", effect: "ask" },
             { action: "read", resource: "*.env", effect: "ask" },
             { action: "read", resource: "*.env.*", effect: "ask" },
             { action: "read", resource: "*.env.example", effect: "allow" },

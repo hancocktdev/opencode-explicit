@@ -20,6 +20,7 @@ import { WellKnown } from "@opencode/core/wellknown"
 import { LayerNode } from "@opencode/util/effect/layer-node"
 import { Global } from "@opencode/util/global"
 import { Npm } from "@opencode/util/npm"
+import { Agent } from "@opencode/schema/agent"
 import { emptyCredentialNode, emptyWellknownNode } from "./fixture/config-nodes"
 import { location } from "./fixture/location"
 import { tmpdir } from "./fixture/tmpdir"
@@ -150,6 +151,38 @@ describe("slim", () => {
               ]),
             ),
           )
+        }),
+      ),
+    ),
+  )
+
+  it.effect("agents ask before leaving the session's folder by default", () =>
+    Effect.sync(() => {
+      // Permission rules resolve last-match-wins; the catch-all allow comes first.
+      const rule = Agent.Info.default(Agent.ID.make("build")).permissions.findLast(
+        (item) => item.action === "external_directory" || item.action === "*",
+      )
+      expect(rule?.effect).toBe("ask")
+    }),
+  )
+
+  it.live("config discovery stops walking parents at $HOME", () =>
+    Effect.acquireDisposable(Effect.promise(() => tmpdir())).pipe(
+      Effect.flatMap((tmp) =>
+        Effect.gen(function* () {
+          const global = path.join(tmp.path, "global")
+          const project = path.join(global, "home", "work", "project")
+          yield* Effect.promise(() =>
+            Promise.all([
+              // Above $HOME (global/home): must never be read.
+              write(path.join(tmp.path, "opencode.json"), JSON.stringify({ snapshots: true })),
+              write(path.join(project, "README.md"), "fixture\n"),
+            ]),
+          )
+          return yield* Effect.gen(function* () {
+            const config = yield* Config.Service
+            expect(Config.latest(yield* config.entries(), "snapshots")).toBeUndefined()
+          }).pipe(Effect.provide(configLayer(project, global)))
         }),
       ),
     ),
