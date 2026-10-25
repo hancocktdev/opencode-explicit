@@ -12,6 +12,7 @@ import { which } from "../util/which.js"
 
 export namespace RipgrepBinary {
   const VERSION = "15.1.0"
+  const DOWNLOAD = false as boolean
   const PLATFORM = {
     "arm64-darwin": { platform: "aarch64-apple-darwin", extension: "tar.gz" },
     "arm64-linux": { platform: "aarch64-unknown-linux-gnu", extension: "tar.gz" },
@@ -93,6 +94,11 @@ export namespace RipgrepBinary {
             const target = path.join(global.bin, `rg${process.platform === "win32" ? ".exe" : ""}`)
             if (yield* fs.isFile(target).pipe(Effect.orDie)) return target
 
+            // slim: never download a prebuilt ripgrep (unverified binary); it must already be installed.
+            if (!DOWNLOAD)
+              throw new Error(
+                "ripgrep (rg) is not installed. slim never downloads it; install it, e.g. `cargo install --locked ripgrep`.",
+              )
             const platformKey = `${process.arch}-${process.platform}` as keyof typeof PLATFORM
             const config = PLATFORM[platformKey]
             if (!config) throw new Error(`unsupported platform for ripgrep: ${platformKey}`)
