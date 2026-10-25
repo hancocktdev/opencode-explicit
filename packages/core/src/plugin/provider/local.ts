@@ -1,12 +1,8 @@
 import { define } from "@opencode/plugin/effect/plugin"
 import type { Entry } from "@opencode/schema/config"
-import { Duration, Effect, Option, Schedule, type Schema, Semaphore, Stream } from "effect"
+import { Duration, Effect, Schedule, type Schema, Semaphore, Stream } from "effect"
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http"
-import { shellParserWasm } from "#shell-parser-wasm"
 import { Config } from "../../config.js"
-import { Environment } from "../../environment/index.js"
-import { EnvironmentUnavailable } from "../../environment/unavailable.js"
-import { Location } from "../../location.js"
 import { Model } from "../../model.js"
 import type { PluginInternal } from "../internal.js"
 import { foldSettings } from "./configured.js"
@@ -41,15 +37,9 @@ export function createLocalProviderPlugin<Discovered>(input: {
       effect: Effect.fn(function* (ctx) {
         const http = HttpClient.filterStatusOk(yield* HttpClient.HttpClient)
         const config = yield* Config.Service
-        const environment = yield* Effect.serviceOption(Environment.Service)
-        const location = yield* Effect.serviceOption(Location.Service)
-        const defaultOrigin =
-          origin ??
-          (shellParserWasm.bash === "" ||
-          (Option.isSome(location) && location.value.workspaceID !== undefined) ||
-          (Option.isSome(environment) && environment.value.spawner === EnvironmentUnavailable.spawner)
-            ? undefined
-            : input.origin)
+        // slim: no built-in localhost default (input.origin). A local provider is polled only when config sets its
+        // baseURL or a caller passes an origin, so nothing probes 127.0.0.1 ports on its own.
+        const defaultOrigin = origin
         const source = { current: configured(yield* config.entries(), input.providerID, defaultOrigin, suffix) }
         const loaded = { models: [] as readonly Discovered[], hash: "[]" }
 
