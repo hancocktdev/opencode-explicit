@@ -1,6 +1,6 @@
 export * as ConfigPluginSource from "./source.js"
 
-import { Directory, Document, type Entry } from "@opencode/schema/config"
+import { Document, type Entry } from "@opencode/schema/config"
 import { ConfigPlugin } from "@opencode/schema/config/plugin"
 import { FSUtil } from "@opencode/util/fs-util"
 import { Host } from "@opencode/plugin/host"
@@ -124,13 +124,8 @@ const scan = Effect.fn("ConfigPluginSource.scan")(function* (
   location: Location.Interface,
   entries: readonly Entry[],
 ) {
-  const discovered = yield* Effect.forEach(
-    entries.filter((entry): entry is Directory => entry.type === "directory"),
-    (entry) =>
-      PluginSourceDirectory.discover(fs, entry.path).pipe(
-        Effect.map((targets) => targets.map((target): Operation => ({ type: "add", target, options: {} }))),
-      ),
-  ).pipe(Effect.map((items) => items.flat()))
+  // slim: plugins load only when a config file lists them under `plugins`. Code sitting in a
+  // plugin/ or plugins/ folder is never auto-discovered, in global or project config roots.
   const configured = entries
     .filter((entry): entry is Document => entry.type === "document")
     .flatMap((entry) =>
@@ -155,8 +150,7 @@ const scan = Effect.fn("ConfigPluginSource.scan")(function* (
       return Option.some<Operation>(operation)
     }),
   ).pipe(Effect.map((operations) => operations.flatMap(Option.toArray)))
-  // Explicit config is applied last so it can remove auto-discovered packages.
-  return yield* Effect.forEach([...discovered, ...resolved], (operation) =>
+  return yield* Effect.forEach(resolved, (operation) =>
     Effect.gen(function* () {
       if (operation.type === "remove" || !path.isAbsolute(operation.target)) return [operation]
       if (!(yield* fs.existsSafe(operation.target))) return [operation]

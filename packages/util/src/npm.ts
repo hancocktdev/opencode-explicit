@@ -437,15 +437,9 @@ const layer = Layer.effect(
 
       return Option.getOrUndefined(
         yield* Effect.gen(function* () {
+          // slim: only report a binary that is already installed; never install the package to find one.
           const generation = yield* current(root)
-          const selected = generation ? yield* pick(generation) : Option.none<string>()
-          if (Option.isSome(selected)) return selected
-
-          yield* add(pkg)
-
-          const installed = yield* current(root)
-          if (!installed) return Option.none<string>()
-          return yield* pick(installed)
+          return generation ? yield* pick(generation) : Option.none<string>()
         }).pipe(
           Effect.scoped,
           Effect.orElseSucceed(() => Option.none<string>()),

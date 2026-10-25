@@ -283,8 +283,8 @@ export const layer = (options?: Options) =>
           ...(yield* loadWellknown().pipe(Effect.orDie)),
           ...globalSupplementary,
           ...explicit,
-          ...direct,
-          ...projectSupplementary,
+          ...projectSafe(direct),
+          ...projectSafe(projectSupplementary),
           ...content,
           ...managedSettings,
         ]
@@ -416,6 +416,15 @@ export const layer = (options?: Options) =>
       })
     }),
   )
+
+// slim: a project folder may only toggle snapshots. Anything else it sets (plugins, MCP servers,
+// references, permissions, providers, formatter or LSP commands, agents) is dropped, and its .opencode/
+// directories contribute no plugin, agent, command or skill sources. Global and explicit config are untouched.
+function projectSafe(entries: readonly Entry[]) {
+  return entries.flatMap((entry) =>
+    entry.type === "document" ? [new Document({ ...entry, info: new Info({ snapshots: entry.info.snapshots }) })] : [],
+  )
+}
 
 export function configured(options?: Options) {
   return makeLocationNode({
