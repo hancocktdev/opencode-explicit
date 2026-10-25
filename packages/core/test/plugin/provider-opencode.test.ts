@@ -758,7 +758,7 @@ describe("OpencodePlugin", () => {
     ),
   )
 
-  it.effect("registers the Console's MCP servers as sent, attaching the credential only where asked", () =>
+  it.effect("slim: never registers MCP servers the Console sends", () =>
     Effect.acquireUseRelease(
       Effect.sync(() => {
         const state = { advertised: true }
@@ -838,26 +838,8 @@ describe("OpencodePlugin", () => {
           )
           yield* drain
 
-          expect(servers()).toEqual({
-            opencode_console: {
-              type: "remote",
-              url: `${server.url.origin}/console/mcp`,
-              headers: { "x-client": "opencode", authorization: "Bearer secret", "x-org-id": "org-a" },
-              oauth: false,
-            },
-            opencode_console_oauth: {
-              type: "remote",
-              url: `${server.url.origin}/console/oauth/mcp`,
-              oauth: { scope: "workspace" },
-              timeout: { startup: 5000 },
-            },
-          })
-
-          state.advertised = false
-          yield* TestClock.adjust("1 minute")
-          yield* drain
+          // slim: the Console advertises two servers; none may be registered.
           expect(servers()).toEqual({})
-          expect(reloads.count).toBe(1)
         }),
       ({ server }) => Effect.promise(() => server.stop(true)),
     ),
