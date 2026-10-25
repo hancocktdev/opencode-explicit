@@ -1,4 +1,5 @@
-// slim: "always" approvals last for the session (and its subagent sessions) only, and are never saved.
+// slim: "always" approvals last for the session (and its subagent sessions) only, are never saved, cover
+// exactly the resources asked about (compared literally), and an outside-folder read never covers a write.
 import { describe, expect } from "bun:test"
 import { Deferred, Effect, Fiber, Layer } from "effect"
 import { Agent } from "@opencode/core/agent"
@@ -67,12 +68,16 @@ function session(id: Session.ID, parent?: Session.ID) {
   })
 }
 
-function assertion(sessionID: Session.ID, id: string, resources = ["src/index.ts"]) {
-  return { id: Permission.ID.create(id), sessionID, action: "read", resources, save: ["src/*"] }
+type Ask = Pick<Permission.AssertInput, "action" | "resources" | "save" | "metadata">
+
+const readSrc: Ask = { action: "read", resources: ["src/index.ts"], save: ["src/*"] }
+
+function assertion(sessionID: Session.ID, id: string, input: Ask = readSrc): Permission.AssertInput {
+  return { id: Permission.ID.create(id), sessionID, ...input }
 }
 
 // Asks once in `sessionID` and answers "always".
-function approveAlways(sessionID: Session.ID) {
+function approveAlways(sessionID: Session.ID, input: Ask = readSrc) {
   return Effect.gen(function* () {
     const service = yield* Permission.Service
     const bus = yield* Bus.Service
@@ -83,9 +88,16 @@ function approveAlways(sessionID: Session.ID) {
         : Effect.void,
     )
     yield* Effect.addFinalizer(() => unsubscribe)
-    const fiber = yield* service.assert(assertion(sessionID, "per_first")).pipe(Effect.forkScoped)
+    const fiber = yield* service.assert(assertion(sessionID, "per_first", input)).pipe(Effect.forkScoped)
     yield* service.reply({ requestID: (yield* Deferred.await(asked)).id, reply: "always" })
     yield* Fiber.join(fiber)
+  })
+}
+
+function effect(sessionID: Session.ID, id: string, input: Ask = readSrc) {
+  return Effect.gen(function* () {
+    const service = yield* Permission.Service
+    return (yield* service.ask(assertion(sessionID, id, input))).effect
   })
 }
 
@@ -103,8 +115,7 @@ describe("slim: always is per session", () => {
     Effect.gen(function* () {
       yield* session(first)
       yield* approveAlways(first)
-      const service = yield* Permission.Service
-      expect(yield* service.ask(assertion(first, "per_again", ["src/other.ts"]))).toMatchObject({ effect: "allow" })
+      expect(yield* effect(first, "per_again")).toBe("allow")
     }),
   )
 
@@ -113,8 +124,7 @@ describe("slim: always is per session", () => {
       yield* session(first)
       yield* session(later)
       yield* approveAlways(first)
-      const service = yield* Permission.Service
-      expect(yield* service.ask(assertion(later, "per_later"))).toMatchObject({ effect: "ask" })
+      expect(yield* effect(later, "per_later")).toBe("ask")
     }),
   )
 
@@ -123,8 +133,7 @@ describe("slim: always is per session", () => {
       yield* session(first)
       yield* session(child, first)
       yield* approveAlways(first)
-      const service = yield* Permission.Service
-      expect(yield* service.ask(assertion(child, "per_child"))).toMatchObject({ effect: "allow" })
+      expect(yield* effect(child, "per_child")).toBe("allow")
     }),
   )
 
@@ -133,8 +142,77 @@ describe("slim: always is per session", () => {
       yield* session(first)
       const saved = yield* PermissionSaved.Service
       yield* saved.add({ projectID: Project.ID.global, action: "read", resources: ["src/*"] })
-      const service = yield* Permission.Service
-      expect(yield* service.ask(assertion(first, "per_saved"))).toMatchObject({ effect: "ask" })
+      expect(yield* effect(first, "per_saved")).toBe("ask")
+    }),
+  )
+})
+
+describe("slim: always covers exactly what was asked", () => {
+  it.effect("not the tool's broader save pattern", () =>
+    Effect.gen(function* () {
+      yield* session(first)
+      yield* approveAlways(first)
+      expect(yield* effect(first, "per_other", { ...readSrc, resources: ["src/other.ts"] })).toBe("ask")
+    }),
+  )
+
+  it.effect("compared literally: an approved `*` in a command is not a wildcard", () =>
+    Effect.gen(function* () {
+      yield* session(first)
+      const shell = (command: string): Ask => ({ action: "shell", resources: [command], save: ["ls *"] })
+      yield* approveAlways(first, shell("ls *"))
+      expect(yield* effect(first, "per_same", shell("ls *"))).toBe("allow")
+      expect(yield* effect(first, "per_wider", shell("ls secret"))).toBe("ask")
+    }),
+  )
+})
+
+describe("slim: an outside-folder read approval never covers a write", () => {
+  const outside = (access?: "read" | "write"): Ask => ({
+    action: "external_directory",
+    resources: ["/outside/repo/file1"],
+    save: ["/outside/repo/file1"],
+    ...(access ? { metadata: { access } } : {}),
+  })
+
+  it.effect("a write to the same path still asks", () =>
+    Effect.gen(function* () {
+      yield* session(first)
+      yield* approveAlways(first, outside("read"))
+      expect(yield* effect(first, "per_read", outside("read"))).toBe("allow")
+      expect(yield* effect(first, "per_write", outside("write"))).toBe("ask")
+    }),
+  )
+
+  it.effect("a request that doesn't say read is treated as a write", () =>
+    Effect.gen(function* () {
+      yield* session(first)
+      yield* approveAlways(first, outside("read"))
+      expect(yield* effect(first, "per_unmarked", outside())).toBe("ask")
+    }),
+  )
+
+  it.effect("a configured `<dir>/*` deny still blocks an exact file and the directory itself", () =>
+    Effect.gen(function* () {
+      yield* session(first)
+      const agents = yield* Agent.Service
+      yield* agents.transform((editor) =>
+        editor.update(Agent.ID.make("test"), (agent) => {
+          agent.permissions = [{ action: "external_directory", resource: "/outside/*", effect: "deny" }]
+        }),
+      )
+      expect(yield* effect(first, "per_file", outside("read"))).toBe("deny")
+      expect(
+        yield* effect(first, "per_dir", { ...outside("read"), resources: ["/outside/*"], save: ["/outside/*"] }),
+      ).toBe("deny")
+    }),
+  )
+
+  it.effect("a write approval also covers reading that path", () =>
+    Effect.gen(function* () {
+      yield* session(first)
+      yield* approveAlways(first, outside("write"))
+      expect(yield* effect(first, "per_read_after_write", outside("read"))).toBe("allow")
     }),
   )
 })
