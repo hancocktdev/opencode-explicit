@@ -11,7 +11,6 @@ import { Watcher } from "../../filesystem/watcher.js"
 import { Location } from "../../location.js"
 import { AbsolutePath } from "../../schema.js"
 import { Skill } from "../../skill.js"
-import { SkillDiscovery } from "../../skill/discovery.js"
 import { SkillFile } from "./skill-file.js"
 import { SkillScan } from "./skill-scan.js"
 
@@ -21,7 +20,6 @@ export const Plugin = define({
   id: "opencode.config.skill",
   effect: Effect.fn(function* (ctx) {
     const config = yield* Config.Service
-    const discovery = yield* SkillDiscovery.Service
     const fs = yield* FSUtil.Service
     const global = yield* Global.Service
     const location = yield* Location.Service
@@ -83,12 +81,10 @@ export const Plugin = define({
         if (result.some((item) => Skill.Source.equals(item, source))) return
         result.push(source)
       }
-      const directories = loaded.entries.flatMap((entry) => (entry.type === "directory" ? [entry.path] : []))
+      // explicit: config folders' skill/ and skills/ are not scanned (v2 watched them live, so anything written
+      // there became a skill). Skills come only from `skills` entries. (.claude/.agents skills are a separate,
+      // opt-in plugin: compatibility.ts.)
       const items = loaded.entries.flatMap((entry) => (entry.type === "document" ? (entry.info.skills ?? []) : []))
-      for (const directory of directories) {
-        add(Skill.DirectorySource.make({ type: "directory", path: AbsolutePath.make(path.join(directory, "skill")) }))
-        add(Skill.DirectorySource.make({ type: "directory", path: AbsolutePath.make(path.join(directory, "skills")) }))
-      }
       for (const item of items) {
         if (URL.canParse(item) && /^(https?:)$/.test(new URL(item).protocol)) {
           add(Skill.UrlSource.make({ type: "url", url: item }))
@@ -106,21 +102,20 @@ export const Plugin = define({
     }
 
     const load = Effect.fn("ConfigSkillPlugin.load")(function* (source: Source) {
-      const directories =
-        source.type === "directory"
-          ? [source.path]
-          : yield* discovery.pull(source.url).pipe(
-              Effect.catchCause((cause) =>
-                Effect.logWarning("failed to load skill source", {
-                  source: Skill.Source.key(source),
-                  cause,
-                }).pipe(Effect.as([] as AbsolutePath[])),
-              ),
-            )
+      // explicit: remote skill sources are never fetched.
+      if (source.type === "url") {
+        yield* Effect.logWarning("remote skill source not loaded (explicit build)", { url: source.url })
+        return [] as Skill.Info[]
+      }
+      const directories = [source.path]
       const roots = (yield* Effect.forEach(directories, watchDirectory)).flat()
       const skills: Skill.Info[] = []
       for (const directory of directories) {
-        for (const filepath of yield* SkillScan.scan(directory)) {
+        // explicit: a `skills` entry names exactly one skill, <folder>/SKILL.md: no scan of subfolders or other .md
+        // files. Upstream scanned up to 6 levels deep (following symlinks) and loaded every SKILL.md it found.
+        const single = path.join(directory, "SKILL.md")
+        const files = (yield* fs.isFile(single).pipe(Effect.orElseSucceed(() => false))) ? [single] : []
+        for (const filepath of files) {
           const resolved = yield* fs.realPath(filepath).pipe(Effect.orElseSucceed(() => filepath))
           if (!roots.some((root) => FSUtil.contains(root, resolved))) yield* watch(resolved, "file")
           const content = yield* fs.readFileStringSafe(filepath).pipe(Effect.orElseSucceed(() => undefined))
