@@ -184,7 +184,10 @@ export const Plugin = {
             "Remove a worktree. The repository location selects configuration; directory identifies the worktree to remove.",
           input: WorktreeRemoveInput,
           output: WorktreeRemoveOutput,
-          options: { namespace: "opencode", codemode: true, pinned: true, permission: "edit" },
+          // explicit: no `permission: "edit"` here, so the tool's visibility follows its own name
+          // (opencode_worktree_remove) and one `opencode_*` deny hides it with the rest of this namespace. Deleting
+          // files still asks for edit approval below.
+          options: { namespace: "opencode", codemode: true, pinned: true },
           execute: (input, context) =>
             Effect.gen(function* () {
               // Removing a worktree deletes files, so it requires the same approval as editing them.
