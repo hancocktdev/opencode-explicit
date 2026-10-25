@@ -10,7 +10,6 @@ import { SessionErrors } from "./session/error.js"
 import { SessionSchema } from "./session/schema.js"
 import { SessionStore } from "./session/store.js"
 import { Wildcard } from "./util/wildcard.js"
-import { PermissionSaved } from "./permission/saved.js"
 import { PluginHooks } from "./plugin/hooks.js"
 
 const PermissionEffect = Permission.Effect
@@ -109,10 +108,8 @@ const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const bus = yield* Bus.Service
-    const location = yield* Location.Service
     const agents = yield* Agent.Service
     const sessions = yield* SessionStore.Service
-    const saved = yield* PermissionSaved.Service
     const hooks = yield* PluginHooks.Service
     const pending = new Map<ID, Pending>()
     let closed = false
@@ -132,14 +129,22 @@ const layer = Layer.effect(
     }).pipe(Effect.uninterruptible)
     yield* Effect.addFinalizer(() => close)
 
-    const savedRules = Effect.fnUntraced(function* () {
-      return (yield* saved.list({ projectID: location.project.id })).map(
-        (item): Permission.Rule => ({
-          action: item.action,
-          resource: item.resource,
-          effect: "allow",
-        }),
-      )
+    // slim: "always" lasts only for the session it was given in (and that session's subagents), in memory.
+    // Upstream saved it per project with no expiry, so one approval silently applied to every later session.
+    // Saved approvals in the database are neither written nor read.
+    const sessionAllows = new Map<SessionSchema.ID, Permission.Rule[]>()
+
+    const rootSession = Effect.fnUntraced(function* (sessionID: SessionSchema.ID) {
+      let current = sessionID
+      while (true) {
+        const parent = (yield* sessions.get(current))?.parentID
+        if (!parent) return current
+        current = parent
+      }
+    })
+
+    const sessionRules = Effect.fnUntraced(function* (sessionID: SessionSchema.ID) {
+      return sessionAllows.get(yield* rootSession(sessionID)) ?? []
     })
 
     const configured = Effect.fnUntraced(function* (sessionID: SessionSchema.ID, agentID?: Agent.ID) {
@@ -160,7 +165,7 @@ const layer = Layer.effect(
     const evaluateInput = Effect.fnUntraced(function* (input: AssertInput) {
       const rules = yield* configured(input.sessionID, input.agent)
       if (denied(input, rules)) return { effect: "deny" as const, rules }
-      const all = [...rules, ...(yield* savedRules())]
+      const all = [...rules, ...(yield* sessionRules(input.sessionID))]
       const effects = input.resources.map((resource) => evaluate(input.action, resource, all).effect)
       const effect: Permission.Effect = effects.includes("ask") ? "ask" : "allow"
       const event = yield* hooks.trigger("permission", "evaluate", {
@@ -288,11 +293,13 @@ const layer = Layer.effect(
           }
 
           if (input.reply === "always" && existing.request.save?.length) {
-            yield* saved.add({
-              projectID: location.project.id,
-              action: existing.request.action,
-              resources: existing.request.save,
-            })
+            const root = yield* rootSession(existing.request.sessionID)
+            sessionAllows.set(root, [
+              ...(sessionAllows.get(root) ?? []),
+              ...existing.request.save.map(
+                (resource): Permission.Rule => ({ action: existing.request.action, resource, effect: "allow" }),
+              ),
+            ])
           }
           yield* Deferred.succeed(existing.deferred, undefined)
           pending.delete(input.requestID)
@@ -334,5 +341,5 @@ const layer = Layer.effect(
 export const node = makeLocationNode({
   service: Service,
   layer,
-  deps: [Bus.node, Location.node, Agent.node, SessionStore.node, PermissionSaved.node, PluginHooks.node],
+  deps: [Bus.node, Location.node, Agent.node, SessionStore.node, PluginHooks.node],
 })

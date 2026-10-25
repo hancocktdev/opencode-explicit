@@ -3,8 +3,8 @@
 // Renders inside the footer when the reducer pushes a FooterView of type
 // "permission". Uses a three-stage state machine (permission.shared.ts):
 //
-//   permission → shows the request with Allow once / Always / Reject buttons
-//   always     → confirmation step before granting permanent access
+//   permission → shows the request with Allow once / Allow for session / Reject buttons
+//   always     → confirmation step before granting access for the rest of the session (slim: never saved)
 //   reject     → text field for the rejection message
 //
 // Keyboard: left/right to select, enter to confirm, esc to reject.
@@ -176,7 +176,7 @@ export function RunPermissionBody(props: {
   const inlineControls = () => controlsWidth() + stringWidth(hint()) + 1 <= width() - (compact() ? 0 : 5)
   const title = createMemo(() => {
     if (stage() === "always") {
-      return "Always allow"
+      return "Allow for session"
     }
 
     if (stage() === "reject") {
