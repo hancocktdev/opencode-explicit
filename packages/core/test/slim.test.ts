@@ -3,7 +3,7 @@
 import fs from "fs/promises"
 import path from "path"
 import { describe, expect } from "bun:test"
-import { Effect, Layer } from "effect"
+import { Effect, Exit, Layer } from "effect"
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http"
 import { Bus } from "@opencode/core/bus"
 import { Config } from "@opencode/core/config"
@@ -15,13 +15,16 @@ import { Location } from "@opencode/core/location"
 import { Plugin } from "@opencode/core/plugin"
 import { PluginHost } from "@opencode/core/plugin/host"
 import { VLLMPlugin } from "@opencode/core/plugin/provider/vllm"
+import { RipgrepBinary } from "@opencode/core/ripgrep/binary"
 import { AbsolutePath } from "@opencode/core/schema"
 import { WellKnown } from "@opencode/core/wellknown"
 import { LayerNode } from "@opencode/util/effect/layer-node"
+import { LayerNodePlatform } from "@opencode/util/effect/app-node-platform"
 import { Global } from "@opencode/util/global"
 import { Npm } from "@opencode/util/npm"
 import { Agent } from "@opencode/schema/agent"
 import { emptyCredentialNode, emptyWellknownNode } from "./fixture/config-nodes"
+import { withEnv } from "./fixture/env"
 import { location } from "./fixture/location"
 import { tmpdir } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
@@ -37,7 +40,9 @@ const configLayer = (project: string, global: string) =>
       Location.node.replace(
         Layer.succeed(
           Location.Service,
-          Location.Service.of(location({ directory: AbsolutePath.make(project) }, { projectDirectory: AbsolutePath.make(project) })),
+          Location.Service.of(
+            location({ directory: AbsolutePath.make(project) }, { projectDirectory: AbsolutePath.make(project) }),
+          ),
         ),
       ),
       Global.node.replace(Global.layerWith({ config: global, home: path.join(global, "home") })),
@@ -184,6 +189,60 @@ describe("slim", () => {
             expect(Config.latest(yield* config.entries(), "snapshots")).toBeUndefined()
           }).pipe(Effect.provide(configLayer(project, global)))
         }),
+      ),
+    ),
+  )
+
+  it.live(".claude and .agents skill folders load only when explicitly enabled", () =>
+    Effect.acquireDisposable(Effect.promise(() => tmpdir())).pipe(
+      Effect.flatMap((tmp) =>
+        Effect.gen(function* () {
+          const global = path.join(tmp.path, "global")
+          const project = path.join(global, "home", "project")
+          yield* Effect.promise(() =>
+            Promise.all(
+              [
+                path.join(global, "home", ".claude", "skills", "a", "SKILL.md"),
+                path.join(global, "home", ".agents", "skills", "b", "SKILL.md"),
+                path.join(project, ".claude", "skills", "c", "SKILL.md"),
+                path.join(project, ".agents", "skills", "d", "SKILL.md"),
+              ].map((file) => write(file, "---\nname: probe\ndescription: probe\n---\n")),
+            ),
+          )
+          return yield* Effect.gen(function* () {
+            const config = yield* Config.Service
+            expect(yield* config.compatibility!()).toEqual({ claude: [], agents: [] })
+          }).pipe(Effect.provide(configLayer(project, global)))
+        }),
+      ),
+    ),
+  )
+
+  it.live("never downloads ripgrep when it is not installed", () =>
+    Effect.acquireDisposable(Effect.promise(() => tmpdir())).pipe(
+      Effect.flatMap((tmp) =>
+        withEnv({ PATH: path.join(tmp.path, "empty-path") }, () =>
+          Effect.gen(function* () {
+            const requests: string[] = []
+            const http = HttpClient.make((request: HttpClientRequest.HttpClientRequest) =>
+              Effect.sync(() => requests.push(request.url)).pipe(
+                Effect.map(() => HttpClientResponse.fromWeb(request, new Response("", { status: 404 }))),
+              ),
+            )
+            const binary = yield* RipgrepBinary.Service.pipe(
+              Effect.provide(
+                AppNodeBuilder.build(RipgrepBinary.node, [
+                  Global.node.replace(
+                    Global.layerWith({ bin: path.join(tmp.path, "bin"), cache: path.join(tmp.path, "cache") }),
+                  ),
+                  LayerNodePlatform.httpClient.replace(Layer.succeed(HttpClient.HttpClient, http)),
+                ]),
+              ),
+            )
+            expect(Exit.isFailure(yield* Effect.exit(binary.filepath))).toBe(true)
+            expect(requests).toEqual([])
+          }),
+        ),
       ),
     ),
   )
