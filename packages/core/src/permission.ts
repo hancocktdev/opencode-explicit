@@ -17,6 +17,22 @@ export { PermissionEffect as Effect }
 export { Rule, Ruleset } from "@opencode/schema/permission"
 const missingAgentPermissions: Permission.Ruleset = [{ action: "*", resource: "*", effect: "deny" }]
 
+// slim: one "Allow for session" approval: exactly one resource of one action.
+interface SessionApproval {
+  readonly action: string
+  readonly resource: string
+  readonly access: "read" | "write"
+}
+
+// Anything not explicitly marked as a read is treated as a write.
+const accessOf = (metadata?: Record<string, unknown>) => (metadata?.access === "read" ? "read" : "write")
+
+// Literal match (a `*` in a command or path is just a character here); a write approval also covers reads.
+const covers = (item: SessionApproval, input: Pick<AssertInput, "action" | "metadata">, resource: string) =>
+  item.action === input.action &&
+  item.resource === resource &&
+  (item.access === "write" || accessOf(input.metadata) === "read")
+
 export const ID = Permission.ID
 export type ID = typeof ID.Type
 
@@ -132,7 +148,10 @@ const layer = Layer.effect(
     // slim: "always" lasts only for the session it was given in (and that session's subagents), in memory.
     // Upstream saved it per project with no expiry, so one approval silently applied to every later session.
     // Saved approvals in the database are neither written nor read.
-    const sessionAllows = new Map<SessionSchema.ID, Permission.Rule[]>()
+    // It also covers exactly what was asked: the request's own resources, compared literally (no wildcards),
+    // never the tool's broader `save` pattern (often `*`, a shell prefix + ` *`, or a whole directory tree).
+    // An outside-folder approval to read never covers a write (metadata.access, set by FileAccess).
+    const sessionAllows = new Map<SessionSchema.ID, SessionApproval[]>()
 
     const rootSession = Effect.fnUntraced(function* (sessionID: SessionSchema.ID) {
       let current = sessionID
@@ -143,7 +162,7 @@ const layer = Layer.effect(
       }
     })
 
-    const sessionRules = Effect.fnUntraced(function* (sessionID: SessionSchema.ID) {
+    const sessionApprovals = Effect.fnUntraced(function* (sessionID: SessionSchema.ID) {
       return sessionAllows.get(yield* rootSession(sessionID)) ?? []
     })
 
@@ -165,8 +184,11 @@ const layer = Layer.effect(
     const evaluateInput = Effect.fnUntraced(function* (input: AssertInput) {
       const rules = yield* configured(input.sessionID, input.agent)
       if (denied(input, rules)) return { effect: "deny" as const, rules }
-      const all = [...rules, ...(yield* sessionRules(input.sessionID))]
-      const effects = input.resources.map((resource) => evaluate(input.action, resource, all).effect)
+      const approvals = yield* sessionApprovals(input.sessionID)
+      const effects = input.resources.map((resource) => {
+        const effect = evaluate(input.action, resource, rules).effect
+        return effect === "ask" && approvals.some((item) => covers(item, input, resource)) ? "allow" : effect
+      })
       const effect: Permission.Effect = effects.includes("ask") ? "ask" : "allow"
       const event = yield* hooks.trigger("permission", "evaluate", {
         sessionID: input.sessionID,
@@ -177,7 +199,7 @@ const layer = Layer.effect(
         source: input.source,
         effect,
       })
-      return { effect: event.effect, message: event.message, rules: all }
+      return { effect: event.effect, message: event.message, rules }
     })
 
     function request(input: AssertInput, message?: string): Request {
@@ -296,8 +318,12 @@ const layer = Layer.effect(
             const root = yield* rootSession(existing.request.sessionID)
             sessionAllows.set(root, [
               ...(sessionAllows.get(root) ?? []),
-              ...existing.request.save.map(
-                (resource): Permission.Rule => ({ action: existing.request.action, resource, effect: "allow" }),
+              ...existing.request.resources.map(
+                (resource): SessionApproval => ({
+                  action: existing.request.action,
+                  resource,
+                  access: accessOf(existing.request.metadata),
+                }),
               ),
             ])
           }

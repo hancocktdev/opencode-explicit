@@ -117,7 +117,7 @@ export const Plugin = {
               const resolveTarget = Effect.fnUntraced(function* (value: string) {
                 const target = yield* access.resolve({ path: value, kind: "file" })
                 if (!target.externalDirectory) return target
-                yield* access.authorizeExternal([target], context, {
+                yield* access.authorizeExternal([target], context, "write", {
                   filepath: target.absolute,
                   parentDir: target.externalDirectory.directory,
                 })

@@ -119,11 +119,11 @@ export function permissionPresentation(
   }
 
   if (action === "external_directory") {
-    const raw = text(metadata.parentDir) || text(metadata.filepath) || resources[0] || ""
-    const directory = wildcardDirectory(raw)
+    // slim: resources are the exact paths asked about; say whether it is a read or a write.
+    const verb = metadata.access === "read" ? "Read outside this folder" : "Write outside this folder"
     return {
       icon: "←",
-      title: `Access external directory ${formatPath(directory)}`,
+      title: resources.length === 1 ? `${verb}: ${formatPath(resources[0]!)}` : verb,
       lines: resources.map((item) => `- ${item}`),
     }
   }
@@ -143,23 +143,18 @@ export function permissionPresentation(
   }
 }
 
-function wildcardDirectory(value: string) {
-  const wildcard = value.indexOf("*")
-  if (wildcard === -1) return value
-  const prefix = value.slice(0, wildcard)
-  if (/^[\\/]+$/.test(prefix) || /^[A-Za-z]:[\\/]$/.test(prefix)) return prefix
-  return prefix.replace(/[\\/]+$/, "")
-}
-
-export function permissionAlwaysLines(input: { action: string; save?: ReadonlyArray<string> }): string[] {
-  const save = input.save ?? []
-  // slim: "always" lasts for this session only and is never saved (core/src/permission.ts).
-  if (save.length === 1 && save[0] === "*") {
-    return [`This will allow ${input.action} for the rest of this session only. Nothing is saved.`]
-  }
+export function permissionAlwaysLines(input: {
+  action: string
+  resources: ReadonlyArray<string>
+  metadata?: Record<string, unknown>
+}): string[] {
+  // slim: "always" approves exactly the listed items, literally, for this session only, and is never saved
+  // (core/src/permission.ts). An outside-folder read approval never covers a write.
+  const kind =
+    input.action === "external_directory" ? (input.metadata?.access === "read" ? " (reading only)" : " (writing)") : ""
   return [
-    "This will allow the following patterns for the rest of this session only. Nothing is saved.",
-    ...save.map((item) => `- ${item}`),
+    `This will allow ${input.action}${kind} for exactly the following, for the rest of this session only. Nothing is saved.`,
+    ...input.resources.map((item) => `- ${item}`),
   ]
 }
 

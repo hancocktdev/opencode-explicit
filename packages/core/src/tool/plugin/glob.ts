@@ -64,7 +64,7 @@ export const Plugin = {
               const searchPath = input.path === "undefined" || input.path === "null" ? undefined : input.path
               const source = { type: "tool" as const, messageID: context.messageID, id: context.id }
               const target = yield* access.resolve({ path: searchPath ?? ".", kind: "directory" })
-              yield* access.authorizeExternal([target], context)
+              yield* access.authorizeExternal([target], context, "read")
               yield* permission.assert({
                 action: name,
                 resources: [input.pattern],

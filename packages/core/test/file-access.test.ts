@@ -153,7 +153,7 @@ describe("FileAccess.authorizeRead", () => {
       const internal = yield* access.resolve({ path: "README.md" })
       const metadata = { filepath: first.absolute, parentDir: path.dirname(first.absolute) }
 
-      yield* access.authorizeExternal([first, internal, second, third, first], invocation, metadata)
+      yield* access.authorizeExternal([first, internal, second, third, first], invocation, "read", metadata)
 
       expect(requests).toEqual([
         {
@@ -167,9 +167,9 @@ describe("FileAccess.authorizeRead", () => {
         },
       ])
 
-      yield* access.authorizeExternal([internal], invocation)
+      yield* access.authorizeExternal([internal], invocation, "read")
       expect(requests).toHaveLength(1)
-      yield* access.authorizeExternal([second], invocation)
+      yield* access.authorizeExternal([second], invocation, "read")
       expect(requests).toHaveLength(2)
       expect(requests[1].resources).toEqual([slash(path.join(git, "nested", "*"))])
       expect(Object.hasOwn(requests[1], "metadata")).toBe(false)

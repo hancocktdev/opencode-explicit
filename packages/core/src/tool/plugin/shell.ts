@@ -133,7 +133,7 @@ export const Plugin = {
           kind: "directory",
         }),
       )
-      yield* access.authorizeExternal([target, ...directories], context)
+      yield* access.authorizeExternal([target, ...directories], context, "write")
       if (parsed.commands.length > 0)
         yield* permission.assert({
           action: name,

@@ -242,7 +242,7 @@ export const Plugin = {
               }
 
               const target = yield* access.resolve({ path: input.path, kind: "file" })
-              yield* access.authorizeExternal([target], context)
+              yield* access.authorizeExternal([target], context, "write")
 
               const original = yield* FileMutation.readText(environment.files, target.absolute).pipe(
                 Effect.catchTag("Environment.NotFound", () =>

@@ -7,7 +7,6 @@ import { Array, Context, Effect, Layer, Schema } from "effect"
 import path from "path"
 import { Location } from "./location.js"
 import { Permission } from "./permission.js"
-import { Project } from "./project.js"
 import { AbsolutePath } from "./schema.js"
 import type { SessionErrors } from "./session/error.js"
 import type { Tool } from "./tool.js"
@@ -39,6 +38,12 @@ export interface Target {
 
 export type Invocation = Pick<Tool.Context, "sessionID" | "agent" | "messageID" | "id">
 
+/**
+ * slim: whether an outside-folder request only reads or may change something. Sent in the permission
+ * request's metadata so a session approval to read never covers a write (core/src/permission.ts).
+ */
+export type ExternalAccess = "read" | "write"
+
 export interface ReadOptions {
   /** A target already authorized by this invocation, used for filename recovery. */
   readonly siblingOf: Target
@@ -51,6 +56,7 @@ export interface Interface {
   readonly authorizeExternal: (
     targets: readonly Target[],
     context: Invocation,
+    access: ExternalAccess,
     metadata?: Permission.AssertInput["metadata"],
   ) => Effect.Effect<void, Permission.Error | SessionErrors.NotFoundError>
   /** Resolve a read target and obtain external-directory approval before read approval. */
@@ -116,8 +122,12 @@ const layer = Layer.effect(
         externalDirectory: {
           action: "external_directory",
           directory,
-          resource: slash(path.join(directory, "*")),
-          save: slash(path.join((yield* Project.root(fs, directory)) ?? directory, "*")),
+          // slim: name exactly what the request reaches. A file is just that file; a directory target
+          // (search, shell workdir) reaches its whole tree, so it stays `<dir>/*`, which keeps configured
+          // `<dir>/*` deny rules matching. Upstream asked for the file's whole parent tree and saved
+          // `<repo root>/*` (`*` matches across `/`), so one approval covered a repository, writes included.
+          resource: type === "Directory" ? slash(path.join(absolute, "*")) : slash(absolute),
+          save: type === "Directory" ? slash(path.join(absolute, "*")) : slash(absolute),
         },
       } satisfies Target
     })
@@ -125,6 +135,7 @@ const layer = Layer.effect(
     const authorizeExternal = Effect.fn("FileAccess.authorizeExternal")(function* (
       targets: readonly Target[],
       context: Invocation,
+      access: ExternalAccess,
       metadata?: Permission.AssertInput["metadata"],
     ) {
       const external = Array.dedupeWith(
@@ -136,7 +147,7 @@ const layer = Layer.effect(
         action: "external_directory",
         resources: external.map((item) => item.resource),
         save: external.map((item) => item.save),
-        ...(metadata === undefined ? {} : { metadata }),
+        metadata: { ...metadata, access },
         ...invocation(context),
       })
     })
@@ -147,10 +158,10 @@ const layer = Layer.effect(
       options?: ReadOptions,
     ) {
       const target = yield* resolve({ path: file, kind: options ? "file" : undefined })
-      const sibling = options && path.dirname(target.absolute) === path.dirname(options.siblingOf.absolute)
 
-      // Filename recovery shares the directory approval, but checks the recovered file's own read rules.
-      if (!sibling) yield* authorizeExternal([target], context)
+      // slim: outside-folder approvals are per exact path, so a recovered filename (a different file)
+      // is asked about like any other. Upstream let recovery share the original file's directory approval.
+      yield* authorizeExternal([target], context, "read")
       yield* permission.assert({
         action: "read",
         resources: [target.resource],
