@@ -76,8 +76,8 @@ function assertion(sessionID: Session.ID, id: string, input: Ask = readSrc): Per
   return { id: Permission.ID.create(id), sessionID, ...input }
 }
 
-// Asks once in `sessionID` and answers "always".
-function approveAlways(sessionID: Session.ID, input: Ask = readSrc) {
+// Asks once in `sessionID` and answers `reply` ("always" by default).
+function approveAlways(sessionID: Session.ID, input: Ask = readSrc, reply: Permission.Reply = "always") {
   return Effect.gen(function* () {
     const service = yield* Permission.Service
     const bus = yield* Bus.Service
@@ -89,7 +89,7 @@ function approveAlways(sessionID: Session.ID, input: Ask = readSrc) {
     )
     yield* Effect.addFinalizer(() => unsubscribe)
     const fiber = yield* service.assert(assertion(sessionID, "per_first", input)).pipe(Effect.forkScoped)
-    yield* service.reply({ requestID: (yield* Deferred.await(asked)).id, reply: "always" })
+    yield* service.reply({ requestID: (yield* Deferred.await(asked)).id, reply })
     yield* Fiber.join(fiber)
   })
 }
@@ -213,6 +213,70 @@ describe("explicit: an outside-folder read approval never covers a write", () =>
       yield* session(first)
       yield* approveAlways(first, outside("write"))
       expect(yield* effect(first, "per_read_after_write", outside("read"))).toBe("allow")
+    }),
+  )
+})
+
+describe('explicit: "Allow folder (read)" covers reading under one outside folder, nothing else', () => {
+  const read = (resource: string): Ask => ({
+    action: "external_directory",
+    resources: [resource],
+    save: [resource],
+    metadata: { access: "read" },
+  })
+  const write = (resource: string): Ask => ({ ...read(resource), metadata: { access: "write" } })
+
+  it.effect("reads anywhere under that folder are allowed for the session", () =>
+    Effect.gen(function* () {
+      yield* session(first)
+      yield* approveAlways(first, read("/outside/repo/file1"), "folder")
+      expect(yield* effect(first, "per_sibling", read("/outside/repo/file2"))).toBe("allow")
+      expect(yield* effect(first, "per_deep", read("/outside/repo/a/b/c.txt"))).toBe("allow")
+      expect(yield* effect(first, "per_search", read("/outside/repo/a/*"))).toBe("allow")
+    }),
+  )
+
+  it.effect("writes in that folder, other folders and later sessions still ask", () =>
+    Effect.gen(function* () {
+      yield* session(first)
+      yield* session(later)
+      yield* approveAlways(first, read("/outside/repo/file1"), "folder")
+      expect(yield* effect(first, "per_write", write("/outside/repo/file2"))).toBe("ask")
+      expect(yield* effect(first, "per_parent", read("/outside/other.txt"))).toBe("ask")
+      expect(yield* effect(first, "per_lookalike", read("/outside/repository/x.txt"))).toBe("ask")
+      expect(yield* effect(later, "per_later_folder", read("/outside/repo/file2"))).toBe("ask")
+    }),
+  )
+
+  it.effect("on a write request it only approves that once", () =>
+    Effect.gen(function* () {
+      yield* session(first)
+      yield* approveAlways(first, write("/outside/repo/file1"), "folder")
+      expect(yield* effect(first, "per_write_again", write("/outside/repo/file1"))).toBe("ask")
+      expect(yield* effect(first, "per_read_after", read("/outside/repo/file2"))).toBe("ask")
+    }),
+  )
+
+  it.effect("a file at the top of the filesystem never becomes an approval for everything", () =>
+    Effect.gen(function* () {
+      yield* session(first)
+      yield* approveAlways(first, read("/file1"), "folder")
+      expect(yield* effect(first, "per_anything", read("/etc/hostname"))).toBe("ask")
+    }),
+  )
+
+  it.effect("it never covers a different action", () =>
+    Effect.gen(function* () {
+      yield* session(first)
+      yield* approveAlways(first, read("/outside/repo/file1"), "folder")
+      expect(
+        yield* effect(first, "per_other_action", {
+          action: "read",
+          resources: ["/outside/repo/.env"],
+          save: ["*"],
+          metadata: { access: "read" },
+        }),
+      ).toBe("ask")
     }),
   )
 })
