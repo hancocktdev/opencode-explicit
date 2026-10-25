@@ -1,4 +1,4 @@
-// slim: "always" approvals last for the session (and its subagent sessions) only, are never saved, cover
+// explicit: "always" approvals last for the session (and its subagent sessions) only, are never saved, cover
 // exactly the resources asked about (compared literally), and an outside-folder read never covers a write.
 import { describe, expect } from "bun:test"
 import { Deferred, Effect, Fiber, Layer } from "effect"
@@ -101,7 +101,7 @@ function effect(sessionID: Session.ID, id: string, input: Ask = readSrc) {
   })
 }
 
-describe("slim: always is per session", () => {
+describe("explicit: always is per session", () => {
   it.effect("an always approval is never written to the database", () =>
     Effect.gen(function* () {
       yield* session(first)
@@ -147,7 +147,7 @@ describe("slim: always is per session", () => {
   )
 })
 
-describe("slim: always covers exactly what was asked", () => {
+describe("explicit: always covers exactly what was asked", () => {
   it.effect("not the tool's broader save pattern", () =>
     Effect.gen(function* () {
       yield* session(first)
@@ -167,7 +167,7 @@ describe("slim: always covers exactly what was asked", () => {
   )
 })
 
-describe("slim: an outside-folder read approval never covers a write", () => {
+describe("explicit: an outside-folder read approval never covers a write", () => {
   const outside = (access?: "read" | "write"): Ask => ({
     action: "external_directory",
     resources: ["/outside/repo/file1"],

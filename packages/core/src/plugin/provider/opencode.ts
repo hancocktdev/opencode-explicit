@@ -242,7 +242,7 @@ export const OpencodePlugin = define<HttpClient.HttpClient | Bus.Service | Manag
               config,
               connection,
               organization: organizationName(credential),
-              // slim: MCP servers pushed by the Console are never added; MCP comes only from local config.
+              // explicit: MCP servers pushed by the Console are never added; MCP comes only from local config.
               mcp: undefined,
             })),
           )

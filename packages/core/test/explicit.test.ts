@@ -1,4 +1,4 @@
-// slim: one test per guarantee the slim branch adds, so an upstream merge that reverts a patch fails here instead of
+// explicit: one test per guarantee the explicit branch adds, so an upstream merge that reverts a patch fails here instead of
 // silently changing what runs. The Console MCP guarantee is pinned in plugin/provider-opencode.test.ts.
 import fs from "fs/promises"
 import path from "path"
@@ -58,7 +58,7 @@ const write = (file: string, content: string) =>
 
 const pluginSource = "export default { id: 'fixture', effect: () => undefined }\n"
 
-describe("slim", () => {
+describe("explicit", () => {
   it.live("project config may only set snapshots", () =>
     Effect.acquireDisposable(Effect.promise(() => tmpdir())).pipe(
       Effect.flatMap((tmp) =>
@@ -258,7 +258,7 @@ describe("slim", () => {
       const plugin = yield* Plugin.Service
       const host = yield* PluginHost.make(plugin)
       yield* VLLMPlugin.effect(host).pipe(Effect.provideService(HttpClient.HttpClient, http))
-      // Without the slim patch the first refresh runs at once and requests 127.0.0.1:8000/health.
+      // Without the explicit patch the first refresh runs at once and requests 127.0.0.1:8000/health.
       yield* Effect.yieldNow.pipe(Effect.repeat({ times: 20 }))
       expect(requests).toEqual([])
     }),

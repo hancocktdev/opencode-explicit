@@ -119,7 +119,7 @@ export function permissionPresentation(
   }
 
   if (action === "external_directory") {
-    // slim: resources are the exact paths asked about; say whether it is a read or a write.
+    // explicit: resources are the exact paths asked about; say whether it is a read or a write.
     const verb = metadata.access === "read" ? "Read outside this folder" : "Write outside this folder"
     return {
       icon: "←",
@@ -148,7 +148,7 @@ export function permissionAlwaysLines(input: {
   resources: ReadonlyArray<string>
   metadata?: Record<string, unknown>
 }): string[] {
-  // slim: "always" approves exactly the listed items, literally, for this session only, and is never saved
+  // explicit: "always" approves exactly the listed items, literally, for this session only, and is never saved
   // (core/src/permission.ts). An outside-folder read approval never covers a write.
   const kind =
     input.action === "external_directory" ? (input.metadata?.access === "read" ? " (reading only)" : " (writing)") : ""

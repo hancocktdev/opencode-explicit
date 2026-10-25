@@ -39,7 +39,7 @@ export interface Target {
 export type Invocation = Pick<Tool.Context, "sessionID" | "agent" | "messageID" | "id">
 
 /**
- * slim: whether an outside-folder request only reads or may change something. Sent in the permission
+ * explicit: whether an outside-folder request only reads or may change something. Sent in the permission
  * request's metadata so a session approval to read never covers a write (core/src/permission.ts).
  */
 export type ExternalAccess = "read" | "write"
@@ -122,7 +122,7 @@ const layer = Layer.effect(
         externalDirectory: {
           action: "external_directory",
           directory,
-          // slim: name exactly what the request reaches. A file is just that file; a directory target
+          // explicit: name exactly what the request reaches. A file is just that file; a directory target
           // (search, shell workdir) reaches its whole tree, so it stays `<dir>/*`, which keeps configured
           // `<dir>/*` deny rules matching. Upstream asked for the file's whole parent tree and saved
           // `<repo root>/*` (`*` matches across `/`), so one approval covered a repository, writes included.
@@ -159,7 +159,7 @@ const layer = Layer.effect(
     ) {
       const target = yield* resolve({ path: file, kind: options ? "file" : undefined })
 
-      // slim: outside-folder approvals are per exact path, so a recovered filename (a different file)
+      // explicit: outside-folder approvals are per exact path, so a recovered filename (a different file)
       // is asked about like any other. Upstream let recovery share the original file's directory approval.
       yield* authorizeExternal([target], context, "read")
       yield* permission.assert({

@@ -4,7 +4,7 @@
 // "permission". Uses a three-stage state machine (permission.shared.ts):
 //
 //   permission → shows the request with Allow once / Allow for session / Reject buttons
-//   always     → confirmation step before granting access for the rest of the session (slim: never saved)
+//   always     → confirmation step before granting access for the rest of the session (explicit: never saved)
 //   reject     → text field for the rejection message
 //
 // Keyboard: left/right to select, enter to confirm, esc to reject.

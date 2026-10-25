@@ -37,7 +37,7 @@ export function createLocalProviderPlugin<Discovered>(input: {
       effect: Effect.fn(function* (ctx) {
         const http = HttpClient.filterStatusOk(yield* HttpClient.HttpClient)
         const config = yield* Config.Service
-        // slim: no built-in localhost default (input.origin). A local provider is polled only when config sets its
+        // explicit: no built-in localhost default (input.origin). A local provider is polled only when config sets its
         // baseURL or a caller passes an origin, so nothing probes 127.0.0.1 ports on its own.
         const defaultOrigin = origin
         const source = { current: configured(yield* config.entries(), input.providerID, defaultOrigin, suffix) }

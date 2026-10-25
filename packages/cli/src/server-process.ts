@@ -123,7 +123,7 @@ const processEffect = Effect.fnUntraced(function* (options: Options) {
             project: !truthy(
               process.env.OPENCODE_CONFIG_PROJECT_DISABLE ?? process.env.OPENCODE_DISABLE_PROJECT_CONFIG,
             ),
-            // slim: .claude and .agents skills are opt-in (OPENCODE_ENABLE_CLAUDE_CODE=1) instead of opt-out.
+            // explicit: .claude and .agents skills are opt-in (OPENCODE_ENABLE_CLAUDE_CODE=1) instead of opt-out.
             claude: truthy(process.env.OPENCODE_ENABLE_CLAUDE_CODE),
             file: process.env.OPENCODE_CONFIG,
             content: process.env.OPENCODE_CONFIG_CONTENT,

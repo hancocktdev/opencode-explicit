@@ -1,4 +1,4 @@
-// slim: outside-folder requests name exactly the path asked about (no `<dir>/*`, no widening to the
+// explicit: outside-folder requests name exactly the path asked about (no `<dir>/*`, no widening to the
 // repository root), say whether they read or write, and a recovered filename is asked about too.
 import { describe, expect } from "bun:test"
 import fs from "fs/promises"
@@ -19,8 +19,8 @@ import { toolIdentity } from "./lib/tool"
 
 const invocation = {
   ...toolIdentity,
-  sessionID: Session.ID.make("ses_slim_file_access"),
-  id: Tool.CallID.make("call-slim"),
+  sessionID: Session.ID.make("ses_explicit_file_access"),
+  id: Tool.CallID.make("call-explicit"),
 }
 const slash = (file: string) => file.replaceAll("\\", "/")
 
@@ -40,7 +40,7 @@ function provide(requests: Permission.AssertInput[]) {
   )
 }
 
-describe("slim: outside-folder requests are exact", () => {
+describe("explicit: outside-folder requests are exact", () => {
   it.live("a file inside a git repository asks for that file only, not the repository", () => {
     const requests: Permission.AssertInput[] = []
     return Effect.gen(function* () {

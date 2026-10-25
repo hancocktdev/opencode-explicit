@@ -94,10 +94,10 @@ export namespace RipgrepBinary {
             const target = path.join(global.bin, `rg${process.platform === "win32" ? ".exe" : ""}`)
             if (yield* fs.isFile(target).pipe(Effect.orDie)) return target
 
-            // slim: never download a prebuilt ripgrep (unverified binary); it must already be installed.
+            // explicit: never download a prebuilt ripgrep (unverified binary); it must already be installed.
             if (!DOWNLOAD)
               throw new Error(
-                "ripgrep (rg) is not installed. slim never downloads it; install it, e.g. `cargo install --locked ripgrep`.",
+                "ripgrep (rg) is not installed. opencode explicit never downloads it; install it, e.g. `cargo install --locked ripgrep`.",
               )
             const platformKey = `${process.arch}-${process.platform}` as keyof typeof PLATFORM
             const config = PLATFORM[platformKey]

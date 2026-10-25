@@ -124,7 +124,7 @@ const scan = Effect.fn("ConfigPluginSource.scan")(function* (
   location: Location.Interface,
   entries: readonly Entry[],
 ) {
-  // slim: plugins load only when a config file lists them under `plugins`. Code sitting in a
+  // explicit: plugins load only when a config file lists them under `plugins`. Code sitting in a
   // plugin/ or plugins/ folder is never auto-discovered, in global or project config roots.
   const configured = entries
     .filter((entry): entry is Document => entry.type === "document")

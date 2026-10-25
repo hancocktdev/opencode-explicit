@@ -758,7 +758,7 @@ describe("OpencodePlugin", () => {
     ),
   )
 
-  it.effect("slim: never registers MCP servers the Console sends", () =>
+  it.effect("explicit: never registers MCP servers the Console sends", () =>
     Effect.acquireUseRelease(
       Effect.sync(() => {
         const state = { advertised: true }
@@ -838,7 +838,7 @@ describe("OpencodePlugin", () => {
           )
           yield* drain
 
-          // slim: the Console advertises two servers; none may be registered.
+          // explicit: the Console advertises two servers; none may be registered.
           expect(servers()).toEqual({})
         }),
       ({ server }) => Effect.promise(() => server.stop(true)),

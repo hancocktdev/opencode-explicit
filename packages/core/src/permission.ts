@@ -17,7 +17,7 @@ export { PermissionEffect as Effect }
 export { Rule, Ruleset } from "@opencode/schema/permission"
 const missingAgentPermissions: Permission.Ruleset = [{ action: "*", resource: "*", effect: "deny" }]
 
-// slim: one "Allow for session" approval: exactly one resource of one action.
+// explicit: one "Allow for session" approval: exactly one resource of one action.
 interface SessionApproval {
   readonly action: string
   readonly resource: string
@@ -145,7 +145,7 @@ const layer = Layer.effect(
     }).pipe(Effect.uninterruptible)
     yield* Effect.addFinalizer(() => close)
 
-    // slim: "always" lasts only for the session it was given in (and that session's subagents), in memory.
+    // explicit: "always" lasts only for the session it was given in (and that session's subagents), in memory.
     // Upstream saved it per project with no expiry, so one approval silently applied to every later session.
     // Saved approvals in the database are neither written nor read.
     // It also covers exactly what was asked: the request's own resources, compared literally (no wildcards),

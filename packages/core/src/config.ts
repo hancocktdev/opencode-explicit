@@ -417,7 +417,7 @@ export const layer = (options?: Options) =>
     }),
   )
 
-// slim: a project folder may only toggle snapshots. Anything else it sets (plugins, MCP servers,
+// explicit: a project folder may only toggle snapshots. Anything else it sets (plugins, MCP servers,
 // references, permissions, providers, formatter or LSP commands, agents) is dropped, and its .opencode/
 // directories contribute no plugin, agent, command or skill sources. Global and explicit config are untouched.
 function projectSafe(entries: readonly Entry[]) {

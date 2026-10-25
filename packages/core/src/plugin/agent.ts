@@ -89,7 +89,7 @@ export const Plugin = define({
           { action: "read", resource: "*.env.*", effect: "ask" },
           { action: "read", resource: "*.env.example", effect: "allow" },
           { action: "subagent", resource: "*", effect: "deny" },
-          // slim: Explore asks like every other agent before leaving the session's folder.
+          // explicit: Explore asks like every other agent before leaving the session's folder.
           { action: "external_directory", resource: "*", effect: "ask" },
         )
       })

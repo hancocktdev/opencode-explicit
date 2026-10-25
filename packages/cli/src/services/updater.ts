@@ -11,7 +11,7 @@ import { RetainedImage } from "./retained-image"
 import { action, parseReleaseVersion, type Policy } from "./updater-action"
 import { errorMessage } from "../util/error"
 
-const SLIM = true as boolean
+const EXPLICIT = true as boolean
 
 export const methods = ["curl", "npm", "pnpm", "bun", "yarn", "vp", "brew", "winget"] as const
 
@@ -533,14 +533,14 @@ const make = Effect.gen(function* () {
   })
 
   const inspect = Effect.fnUntraced(function* () {
-    // slim: never check for or install updates on its own; updates come only from rebuilding slim.
+    // explicit: never check for or install updates on its own; updates come only from rebuilding the explicit branch.
     if (
-      SLIM ||
+      EXPLICIT ||
       OPENCODE_LOCAL ||
       ["1", "true"].includes(process.env.OPENCODE_DISABLE_AUTOUPDATE?.toLowerCase() ?? "")
     ) {
       yield* Effect.logInfo("update check skipped", {
-        reason: SLIM ? "slim" : OPENCODE_LOCAL ? "local-install" : "disabled",
+        reason: EXPLICIT ? "explicit" : OPENCODE_LOCAL ? "local-install" : "disabled",
         version: OPENCODE_VERSION,
         channel: OPENCODE_CHANNEL,
       })

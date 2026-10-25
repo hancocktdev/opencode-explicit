@@ -77,7 +77,7 @@ export const discover = Effect.fn("ConfigDiscovery.discover")(function* (options
   const directories =
     globalRoots.slice(0, configDirectories.length).includes(current) || options?.project === false
       ? []
-      : // slim: walk parents only up to $HOME (v1 stopped there too); outside $HOME, only the folder itself.
+      : // explicit: walk parents only up to $HOME (v1 stopped there too); outside $HOME, only the folder itself.
         yield* fs
           .up({
             targets: ["."],
@@ -133,7 +133,7 @@ export const discover = Effect.fn("ConfigDiscovery.discover")(function* (options
       visible.filter((item) => path.basename(item) === ".opencode").toReversed(),
       (directory) => fs.isDir(directory).pipe(Effect.map((present) => ({ path: directory, present }))),
     ),
-    // slim: .claude and .agents roots (skills from other tools) load only when explicitly enabled.
+    // explicit: .claude and .agents roots (skills from other tools) load only when explicitly enabled.
     claude:
       options?.claude !== true
         ? []
