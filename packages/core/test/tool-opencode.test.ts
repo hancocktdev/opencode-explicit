@@ -256,3 +256,31 @@ worktreeIt.live("creates, lists, and removes worktrees for the plugin's project"
     expect((yield* run("worktree_list", {})).worktrees).not.toContainEqual({ directory, strategy: "git" })
   }),
 )
+
+it.effect("explicit: one opencode_* deny hides every opencode tool, worktree_remove included", () =>
+  Effect.gen(function* () {
+    const plugins = yield* Plugin.Service
+    yield* OpenCodeTools.Plugin.effect(yield* PluginHost.make(plugins))
+    const registry = yield* Tool.Service
+    const allowed = JSON.stringify(
+      (yield* registry.snapshot([{ action: "*", resource: "*", effect: "allow" }])).codeModeCatalog,
+    )
+    expect(allowed).toContain("worktree_remove")
+    expect(allowed).toContain("session_rename")
+    const denied = JSON.stringify(
+      (yield* registry.snapshot([
+        { action: "*", resource: "*", effect: "allow" },
+        { action: "opencode_*", resource: "*", effect: "deny" },
+      ])).codeModeCatalog ?? "",
+    )
+    for (const name of [
+      "worktree_remove",
+      "worktree_create",
+      "worktree_list",
+      "session_rename",
+      "session_move",
+      "models",
+    ])
+      expect(denied).not.toContain(`"${name}"`)
+  }),
+)
