@@ -133,8 +133,9 @@ export const discover = Effect.fn("ConfigDiscovery.discover")(function* (options
       visible.filter((item) => path.basename(item) === ".opencode").toReversed(),
       (directory) => fs.isDir(directory).pipe(Effect.map((present) => ({ path: directory, present }))),
     ),
+    // slim: .claude and .agents roots (skills from other tools) load only when explicitly enabled.
     claude:
-      options?.claude === false
+      options?.claude !== true
         ? []
         : [
             ...new Set([
@@ -142,11 +143,14 @@ export const discover = Effect.fn("ConfigDiscovery.discover")(function* (options
               ...visible.filter((item) => path.basename(item) === ".claude").toReversed(),
             ]),
           ],
-    agents: [
-      ...new Set([
-        ...(globalEnabled ? [globalAgentsDirectory] : []),
-        ...visible.filter((item) => path.basename(item) === ".agents").toReversed(),
-      ]),
-    ],
+    agents:
+      options?.claude !== true
+        ? []
+        : [
+            ...new Set([
+              ...(globalEnabled ? [globalAgentsDirectory] : []),
+              ...visible.filter((item) => path.basename(item) === ".agents").toReversed(),
+            ]),
+          ],
   } satisfies Sources
 })

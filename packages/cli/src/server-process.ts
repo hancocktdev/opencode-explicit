@@ -123,11 +123,8 @@ const processEffect = Effect.fnUntraced(function* (options: Options) {
             project: !truthy(
               process.env.OPENCODE_CONFIG_PROJECT_DISABLE ?? process.env.OPENCODE_DISABLE_PROJECT_CONFIG,
             ),
-            // .claude is only read for skills, so both flags gate the same roots.
-            claude: !(
-              truthy(process.env.OPENCODE_DISABLE_CLAUDE_CODE) ||
-              truthy(process.env.OPENCODE_DISABLE_CLAUDE_CODE_SKILLS)
-            ),
+            // slim: .claude and .agents skills are opt-in (OPENCODE_ENABLE_CLAUDE_CODE=1) instead of opt-out.
+            claude: truthy(process.env.OPENCODE_ENABLE_CLAUDE_CODE),
             file: process.env.OPENCODE_CONFIG,
             content: process.env.OPENCODE_CONFIG_CONTENT,
           },
