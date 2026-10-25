@@ -266,7 +266,7 @@ export type CommandInfo = { name: string; description?: string }
 
 export type RpcOutput = { output?: any }
 
-export type PermissionReply = "once" | "always" | "reject"
+export type PermissionReply = "once" | "always" | "folder" | "reject"
 
 export type PtyID = string
 
@@ -5509,11 +5509,11 @@ export type PermissionReplyInput = {
   readonly sessionID: { readonly sessionID: string; readonly requestID: string }["sessionID"]
   readonly requestID: { readonly sessionID: string; readonly requestID: string }["requestID"]
   readonly decision: {
-    readonly decision: "once" | "always" | "reject"
+    readonly decision: "once" | "always" | "folder" | "reject"
     readonly message?: string | undefined
   }["decision"]
   readonly message?: {
-    readonly decision: "once" | "always" | "reject"
+    readonly decision: "once" | "always" | "folder" | "reject"
     readonly message?: string | undefined
   }["message"]
 }

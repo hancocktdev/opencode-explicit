@@ -158,9 +158,31 @@ export function permissionAlwaysLines(input: {
   ]
 }
 
-export function permissionOptionLabel(option: "once" | "always" | "reject" | "confirm" | "cancel") {
+// explicit: the folders a "folder" reply would approve for reading (core/src/permission.ts `folderOf`), or
+// undefined when the reply doesn't apply: only outside-folder reads, never the top of the filesystem.
+export function permissionFolders(input: {
+  action: string
+  resources: ReadonlyArray<string>
+  metadata?: Record<string, unknown>
+}): string[] | undefined {
+  if (input.action !== "external_directory" || input.metadata?.access !== "read") return undefined
+  const folders = input.resources.map((item) =>
+    item.endsWith("/*") ? item : `${item.slice(0, item.lastIndexOf("/"))}/*`,
+  )
+  return folders.length > 0 && folders.every((folder) => folder !== "/*") ? folders : undefined
+}
+
+export function permissionFolderLines(folders: ReadonlyArray<string>): string[] {
+  return [
+    "This will allow reading anything under the following, at any depth, for the rest of this session only. Writes still ask. Nothing is saved.",
+    ...folders.map((folder) => `- ${folder}`),
+  ]
+}
+
+export function permissionOptionLabel(option: "once" | "always" | "folder" | "reject" | "confirm" | "cancel") {
   if (option === "once") return "Allow once"
   if (option === "always") return "Allow for session"
+  if (option === "folder") return "Allow folder (read)"
   if (option === "reject") return "Reject"
   if (option === "confirm") return "Confirm"
   return "Cancel"

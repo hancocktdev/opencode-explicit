@@ -17,21 +17,36 @@ export { PermissionEffect as Effect }
 export { Rule, Ruleset } from "@opencode/schema/permission"
 const missingAgentPermissions: Permission.Ruleset = [{ action: "*", resource: "*", effect: "deny" }]
 
-// explicit: one "Allow for session" approval: exactly one resource of one action.
+// explicit: one session approval: exactly one resource of one action ("Allow for session"), or, for the
+// "folder" reply, one outside folder approved for reading at any depth.
 interface SessionApproval {
   readonly action: string
   readonly resource: string
   readonly access: "read" | "write"
+  readonly folder?: true
 }
 
 // Anything not explicitly marked as a read is treated as a write.
 const accessOf = (metadata?: Record<string, unknown>) => (metadata?.access === "read" ? "read" : "write")
 
-// Literal match (a `*` in a command or path is just a character here); a write approval also covers reads.
-const covers = (item: SessionApproval, input: Pick<AssertInput, "action" | "metadata">, resource: string) =>
-  item.action === input.action &&
-  item.resource === resource &&
-  (item.access === "write" || accessOf(input.metadata) === "read")
+// Exact approvals match literally (a `*` in a command or path is just a character there), and a write approval
+// also covers reads. Folder approvals match as a pattern and only ever cover reads.
+const covers = (item: SessionApproval, input: Pick<AssertInput, "action" | "metadata">, resource: string) => {
+  if (item.action !== input.action) return false
+  if (item.folder) return accessOf(input.metadata) === "read" && Wildcard.match(resource, item.resource)
+  return item.resource === resource && (item.access === "write" || accessOf(input.metadata) === "read")
+}
+
+/** Whether the "folder" reply applies: only to outside-folder reads. */
+export const folderable = (request: Pick<Request, "action" | "metadata">) =>
+  request.action === "external_directory" && accessOf(request.metadata) === "read"
+
+// `/x/a.txt` → `/x/*`; a searched folder (`/x/*`) stays itself. Undefined for anything at the top of the
+// filesystem, which would become `/*` (everything).
+const folderOf = (resource: string) => {
+  const folder = resource.endsWith("/*") ? resource : `${resource.slice(0, resource.lastIndexOf("/"))}/*`
+  return folder === "/*" ? undefined : folder
+}
 
 export const ID = Permission.ID
 export type ID = typeof ID.Type
@@ -327,9 +342,27 @@ const layer = Layer.effect(
               ),
             ])
           }
+          // A "folder" reply on anything but an outside-folder read, or for a top-level path, approves just this once.
+          const folders = folderable(existing.request) ? existing.request.resources.map(folderOf) : []
+          const folderGrant =
+            input.reply === "folder" && folders.length > 0 && folders.every((folder) => folder !== undefined)
+          if (folderGrant) {
+            const root = yield* rootSession(existing.request.sessionID)
+            sessionAllows.set(root, [
+              ...(sessionAllows.get(root) ?? []),
+              ...folders.map(
+                (folder): SessionApproval => ({
+                  action: existing.request.action,
+                  resource: folder!,
+                  access: "read",
+                  folder: true,
+                }),
+              ),
+            ])
+          }
           yield* Deferred.succeed(existing.deferred, undefined)
           pending.delete(input.requestID)
-          if (input.reply !== "always" || !existing.request.save?.length) return
+          if (!folderGrant && (input.reply !== "always" || !existing.request.save?.length)) return
 
           for (const [id, item] of pending) {
             const result = yield* evaluateInput({ ...item.request, agent: item.agent }).pipe(
@@ -339,7 +372,7 @@ const layer = Layer.effect(
             yield* bus.publish(Permission.Event.Replied, {
               sessionID: item.request.sessionID,
               requestID: item.request.id,
-              reply: "always",
+              reply: folderGrant ? "folder" : "always",
             })
             yield* Deferred.succeed(item.deferred, undefined)
             pending.delete(id)

@@ -7,7 +7,13 @@ import type { PermissionReply, PermissionRequest } from "@opencode/client"
 import { SplitBorder } from "../../ui/border"
 import { useData } from "../../context/data"
 import { filetype } from "../../util/filetype"
-import { permissionAlwaysLines, permissionOptionLabel, permissionPresentation } from "../../util/permission"
+import {
+  permissionAlwaysLines,
+  permissionFolderLines,
+  permissionFolders,
+  permissionOptionLabel,
+  permissionPresentation,
+} from "../../util/permission"
 import { getScrollAcceleration } from "../../util/scroll"
 import { useConfig } from "../../config"
 import { Keymap } from "../../context/keymap"
@@ -165,6 +171,7 @@ export function PermissionPrompt(props: { request: PermissionRequest; directory?
             },
             pathFormatter.format,
           )
+          const folders = permissionFolders(props.request)
           const presentationBody = () =>
             props.request.action === "edit" ? (
               <EditBody file={current.file} diff={current.diff} patch={current.patch} />
@@ -221,28 +228,36 @@ export function PermissionPrompt(props: { request: PermissionRequest; directory?
               instance={props.request.id}
               header={header()}
               body={(option) => (
-                <Show when={option === "always"} fallback={presentationBody()}>
+                <Show when={option === "always" || (option === "folder" && folders)} fallback={presentationBody()}>
                   <box paddingLeft={1} gap={1}>
-                    <For each={permissionAlwaysLines(props.request)}>
+                    <For
+                      each={
+                        option === "folder" && folders
+                          ? permissionFolderLines(folders)
+                          : permissionAlwaysLines(props.request)
+                      }
+                    >
                       {(line, index) => <text fg={index() === 0 ? theme.text.muted : theme.text.base}>{line}</text>}
                     </For>
                   </box>
                 </Show>
               )}
-              options={
-                props.request.save?.length
-                  ? {
-                      once: permissionOptionLabel("once"),
-                      always: permissionOptionLabel("always"),
-                      reject: permissionOptionLabel("reject"),
-                    }
-                  : { once: permissionOptionLabel("once"), reject: permissionOptionLabel("reject") }
-              }
+              options={{
+                once: permissionOptionLabel("once"),
+                ...(props.request.save?.length ? { always: permissionOptionLabel("always") } : {}),
+                // explicit: offered only on outside-folder reads; see permissionFolders.
+                ...(folders ? { folder: permissionOptionLabel("folder") } : {}),
+                reject: permissionOptionLabel("reject"),
+              }}
               escapeKey="reject"
               fullscreen
               onSelect={(option) => {
                 if (option === "always") {
                   reply("always")
+                  return
+                }
+                if (option === "folder") {
+                  reply("folder")
                   return
                 }
                 if (option === "reject") {

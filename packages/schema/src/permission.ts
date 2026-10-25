@@ -39,7 +39,10 @@ export const Request = Schema.Struct({
 }).annotate({ identifier: "Permission.Request" })
 export interface Request extends Schema.Schema.Type<typeof Request> {}
 
-export const Reply = Schema.Literals(["once", "always", "reject"]).annotate({ identifier: "Permission.Reply" })
+// explicit: "folder" approves reading anything under an outside folder for the session (core/src/permission.ts).
+export const Reply = Schema.Literals(["once", "always", "folder", "reject"]).annotate({
+  identifier: "Permission.Reply",
+})
 export type Reply = typeof Reply.Type
 
 const Asked = ephemeral({ type: "permission.asked", schema: Request.fields })
