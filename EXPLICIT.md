@@ -1,15 +1,17 @@
 # opencode explicit
 
-`explicit` is a branch of this fork of [opencode](https://github.com/anomalyco/opencode) (v2) that
-removes or switches off anything that runs, downloads or loads code without being chosen.
+`opencode explicit` is a standalone copy of [opencode](https://github.com/anomalyco/opencode) (v2), with
+full upstream history, that removes or switches off anything that runs, downloads or loads code without
+being chosen.
 
 - **Based on:** upstream `dev` at commit
   [`b64cc80db3c933c7a83980b1f36eef047551c845`](https://github.com/anomalyco/opencode/commit/b64cc80db3c933c7a83980b1f36eef047551c845)
   (upstream's own commit, 2026-10-24: "fix(core): wait for plugin activation before each runner step (#51133)").
   Every commit after it on this branch is one of this branch's changes.
-- **Never synced automatically.** Upstream changes are not pulled in as a matter of course. The branch is
-  rebased onto a newer upstream commit only after reviewing that upstream change, and only when there is a
-  deliberate reason or a real need for it.
+- **Never synced automatically.** This repository has no link to upstream. Upstream changes reach it only
+  through [hancocktdev/opencode](https://github.com/hancocktdev/opencode), an unmodified fork that serves
+  as the decision boundary: a change is brought in only after it has been reviewed there, and only when
+  there is a deliberate reason to take it.
 
 The rules behind every change:
 
