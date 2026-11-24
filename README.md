@@ -1,4 +1,5 @@
 > **This is opencode explicit**, a standalone copy of opencode with everything that runs, downloads or loads code without being chosen removed or switched off. See [EXPLICIT.md](EXPLICIT.md) for what changes and how to build it. The installation instructions below install official upstream opencode, not this version.
+> **NOTE**, that it is not built by the OpenCode team and is not affiliated with them in any way.
 
 <p align="center">
   <a href="https://opencode.ai">
